@@ -58,7 +58,6 @@ class EkfExternalVisionTest : public ::testing::Test {
 	void SetUp() override
 	{
 		_ekf->init(0);
-		_sensor_simulator.runSeconds(2);
 	}
 
 	// Use this method to clean up any memory, network etc. after each test
@@ -69,6 +68,8 @@ class EkfExternalVisionTest : public ::testing::Test {
 
 TEST_F(EkfExternalVisionTest, checkVisionFusionLogic)
 {
+	_sensor_simulator.runSeconds(2);
+
 	_ekf_wrapper.enableExternalVisionPositionFusion();
 	_sensor_simulator.startExternalVision();
 	_sensor_simulator.runSeconds(2);
@@ -103,10 +104,16 @@ TEST_F(EkfExternalVisionTest, checkVisionFusionLogic)
 
 TEST_F(EkfExternalVisionTest, visionVarianceCheck)
 {
+	_sensor_simulator.runSeconds(2);
+
 	const Vector3f velVar_init = _ekf_wrapper.getVelocityVariance();
 	EXPECT_NEAR(velVar_init(0), velVar_init(1), 0.0001);
 
-	_sensor_simulator._vio.setVelocityVariance(Vector3f{2.0f,0.01f,0.01f});
+	float vel_cov_data [9] = {2.0f, 0.0f, 0.0f,
+				  0.0f, 0.01f, 0.0f,
+				  0.0f, 0.0f, 0.01f};
+	Matrix3f vel_cov(vel_cov_data);
+	_sensor_simulator._vio.setVelocityCovariance(vel_cov);
 	_ekf_wrapper.enableExternalVisionVelocityFusion();
 	_sensor_simulator.startExternalVision();
 	_sensor_simulator.runSeconds(4);
@@ -117,6 +124,8 @@ TEST_F(EkfExternalVisionTest, visionVarianceCheck)
 
 TEST_F(EkfExternalVisionTest, visionAlignment)
 {
+	_sensor_simulator.runSeconds(2);
+
 	// GIVEN: Drone is pointing north, and we use mag (ROTATE_EV)
 	//        Heading of drone in EKF frame is 0°
 
@@ -127,7 +136,11 @@ TEST_F(EkfExternalVisionTest, visionAlignment)
 
 	// Simulate high uncertainty on vision x axis which is in this case
 	// the y EKF frame axis
-	_sensor_simulator._vio.setVelocityVariance(Vector3f{2.0f,0.01f,0.01f});
+	float vel_cov_data [9] = {2.0f, 0.0f, 0.0f,
+				  0.0f, 0.01f, 0.0f,
+				  0.0f, 0.0f, 0.01f};
+	Matrix3f vel_cov(vel_cov_data);
+	_sensor_simulator._vio.setVelocityCovariance(vel_cov);
 	_ekf_wrapper.enableExternalVisionVelocityFusion();
 	_sensor_simulator.startExternalVision();
 
@@ -144,4 +157,64 @@ TEST_F(EkfExternalVisionTest, visionAlignment)
 	Quatf estimatedExternalVisionFrameOffset = _ekf_wrapper.getVisionAlignmentQuaternion();
 	EXPECT_TRUE(matrix::isEqual(externalVisionFrameOffset.canonical(),
 				    estimatedExternalVisionFrameOffset.canonical()));
+}
+
+TEST_F(EkfExternalVisionTest, velocityFrameBody)
+{
+	const Quatf quat_sim(Eulerf(0.0f, 0.0f, math::radians(88.0f)));
+	_sensor_simulator.simulateOrientation(quat_sim);
+	_sensor_simulator.runSeconds(2);
+
+	const Vector3f velVar_init = _ekf_wrapper.getVelocityVariance();
+	EXPECT_NEAR(velVar_init(0), velVar_init(1), 0.0001);
+
+	_sensor_simulator._vio.setVelocityFrameToBody();
+
+	float vel_cov_data [9] = {2.0f, 0.0f, 0.0f,
+				  0.0f, 0.01f, 0.0f,
+				  0.0f, 0.0f, 0.01f};
+	Matrix3f vel_cov_body(vel_cov_data);
+	Vector3f vel_body(1.0f, 0.0f, 0.0f);
+	_sensor_simulator._vio.setVelocityCovariance(vel_cov_body);
+	_sensor_simulator._vio.setVelocity(vel_body);
+	_ekf_wrapper.enableExternalVisionVelocityFusion();
+	_sensor_simulator.startExternalVision();
+	_sensor_simulator.runSeconds(4);
+
+	const Vector3f velVar_new = _ekf_wrapper.getVelocityVariance();
+	EXPECT_TRUE(velVar_new(1) > velVar_new(0));
+
+	const Vector3f vel_earth_est = _ekf_wrapper.getVelocity();
+	EXPECT_NEAR(vel_earth_est(0), 0.0f, 0.1f);
+	EXPECT_NEAR(vel_earth_est(1), 1.0f, 0.1f);
+}
+
+TEST_F(EkfExternalVisionTest, velocityFrameLocal)
+{
+	const Quatf quat_sim(Eulerf(0.0f, 0.0f, math::radians(88.0f)));
+	_sensor_simulator.simulateOrientation(quat_sim);
+	_sensor_simulator.runSeconds(2);
+
+	const Vector3f velVar_init = _ekf_wrapper.getVelocityVariance();
+	EXPECT_NEAR(velVar_init(0), velVar_init(1), 0.0001);
+
+	_sensor_simulator._vio.setVelocityFrameToLocal();
+
+	float vel_cov_data [9] = {2.0f, 0.0f, 0.0f,
+				  0.0f, 0.01f, 0.0f,
+				  0.0f, 0.0f, 0.01f};
+	Matrix3f vel_cov_earth(vel_cov_data);
+	Vector3f vel_earth(1.0f, 0.0f, 0.0f);
+	_sensor_simulator._vio.setVelocityCovariance(vel_cov_earth);
+	_sensor_simulator._vio.setVelocity(vel_earth);
+	_ekf_wrapper.enableExternalVisionVelocityFusion();
+	_sensor_simulator.startExternalVision();
+	_sensor_simulator.runSeconds(4);
+
+	const Vector3f velVar_new = _ekf_wrapper.getVelocityVariance();
+	EXPECT_TRUE(velVar_new(0) > velVar_new(1));
+
+	const Vector3f vel_earth_est = _ekf_wrapper.getVelocity();
+	EXPECT_NEAR(vel_earth_est(0), 1.0f, 0.1f);
+	EXPECT_NEAR(vel_earth_est(1), 0.0f, 0.1f);
 }

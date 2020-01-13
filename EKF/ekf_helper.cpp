@@ -95,12 +95,10 @@ bool Ekf::resetVelocity()
 
 	} else if (_control_status.flags.ev_vel) {
 		ECL_INFO_TIMESTAMPED("reset velocity to ev velocity");
-		Vector3f _ev_vel = _ev_sample_delayed.vel;
-		if(_params.fusion_mode & MASK_ROTATE_EV){
-			_ev_vel = _R_ev_to_ekf *_ev_sample_delayed.vel;
-		}
-		_state.vel = _ev_vel;
-		P.uncorrelateCovarianceSetVariance<3>(4, _ev_sample_delayed.velVar);
+
+		_state.vel = getVisionVelocityInEkfFrame();
+		P.uncorrelateCovarianceSetVariance<3>(4, getVisionVelocityVarianceInEkfFrame());
+
 	} else {
 		ECL_INFO_TIMESTAMPED("reset velocity to zero");
 		// Used when falling back to non-aiding mode of operation
@@ -1667,6 +1665,48 @@ void Ekf::get_ev2ekf_quaternion(float *quat)
 	for (unsigned i = 0; i < 4; i++) {
 		quat[i] = quat_ev2ekf(i);
 	}
+}
+
+Vector3f Ekf::getVisionVelocityInEkfFrame()
+{
+	// correct velocity for offset relative to IMU
+	const Vector3f ang_rate = _imu_sample_delayed.delta_ang * (1.0f / _imu_sample_delayed.delta_ang_dt);
+	const Vector3f pos_offset_body = _params.ev_pos_body - _params.imu_pos_body;
+	const Vector3f vel_offset_body = ang_rate % pos_offset_body;
+
+	// rotate measurement into correct earth frame if required
+	if (_ev_sample_delayed.vel_frame == BODY_FRAME_FRD)
+	{
+		return _R_to_earth * (_ev_sample_delayed.vel - vel_offset_body);
+	}
+	else // _ev_sample_delayed.vel_frame == LOCAL_FRAME_FRD
+	{
+		const Vector3f vel_offset_earth = _R_to_earth * vel_offset_body;
+		if(_params.fusion_mode & MASK_ROTATE_EV)
+		{
+			return _R_ev_to_ekf *_ev_sample_delayed.vel - vel_offset_earth;
+		}
+		return _ev_sample_delayed.vel - vel_offset_earth;
+	}
+}
+
+Vector3f Ekf::getVisionVelocityVarianceInEkfFrame()
+{
+	Matrix3f ev_vel_cov = _ev_sample_delayed.velCov;
+
+	// rotate measurement into correct earth frame if required
+	if (_ev_sample_delayed.vel_frame == BODY_FRAME_FRD)
+	{
+		ev_vel_cov = _R_to_earth * ev_vel_cov * _R_to_earth.transpose();
+	}
+	else // (_ev_sample_delayed.vel_frame == LOCAL_FRAME_FRD)
+	{
+		if(_params.fusion_mode & MASK_ROTATE_EV)
+		{
+			ev_vel_cov = _R_ev_to_ekf * ev_vel_cov * _R_ev_to_ekf.transpose();
+		}
+	}
+	return ev_vel_cov.diag();
 }
 
 // Increase the yaw error variance of the quaternions
