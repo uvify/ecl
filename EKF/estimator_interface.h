@@ -54,6 +54,7 @@
 #include <mathlib/mathlib.h>
 
 using namespace estimator;
+using namespace estimator::sensor;
 
 class EstimatorInterface
 {
