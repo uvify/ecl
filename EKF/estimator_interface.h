@@ -240,7 +240,7 @@ public:
 	// set sensor limitations reported by the rangefinder
 	void set_rangefinder_limits(float min_distance, float max_distance)
 	{
-		_sensor_rng.setLimits(min_distance, max_distance);
+		_range_sensor.setLimits(min_distance, max_distance);
 	}
 
 	// set sensor limitations reported by the optical flow sensor
@@ -456,7 +456,7 @@ protected:
 	magSample _mag_sample_delayed{};
 	baroSample _baro_sample_delayed{};
 	gpsSample _gps_sample_delayed{};
-	SensorRangeFinder _sensor_rng{};
+	SensorRangeFinder _range_sensor{};
 	airspeedSample _airspeed_sample_delayed{};
 	flowSample _flow_sample_delayed{};
 	extVisionSample _ev_sample_delayed{};
