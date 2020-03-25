@@ -1423,6 +1423,7 @@ void Ekf::initialiseQuatCovariances(Vector3f &rot_vec_var)
 
 void Ekf::setControlBaroHeight()
 {
+	//printf("baro!\n");
 	_control_status.flags.baro_hgt = true;
 
 	_control_status.flags.gps_hgt = false;
@@ -1432,6 +1433,7 @@ void Ekf::setControlBaroHeight()
 
 void Ekf::setControlRangeHeight()
 {
+	//printf("range!\n");
 	_control_status.flags.rng_hgt = true;
 
 	_control_status.flags.baro_hgt = false;
@@ -1441,6 +1443,7 @@ void Ekf::setControlRangeHeight()
 
 void Ekf::setControlGPSHeight()
 {
+	printf("gps!\n");
 	_control_status.flags.gps_hgt = true;
 
 	_control_status.flags.baro_hgt = false;

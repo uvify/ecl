@@ -590,6 +590,7 @@ int EstimatorInterface::getNumberOfActiveHorizontalAidingSources() const
 
 bool EstimatorInterface::isHorizontalAidingActive() const
 {
+	// ECL_INFO("Horizontal Aid %d", getNumberOfActiveHorizontalAidingSources());
 	return getNumberOfActiveHorizontalAidingSources() > 0;
 }
 

@@ -185,6 +185,7 @@ bool Ekf::initialiseFilter()
 
 	} else {
 		// we use baro height initially and switch to GPS/range/EV finder later when it passes checks.
+		printf("Start from BR");
 		setControlBaroHeight();
 
 		// reset variables that are shared with post alignment GPS checks

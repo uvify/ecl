@@ -64,7 +64,7 @@ void Ekf::updateRangeDataValidity()
 		return;
 	}
 
-	// Don't allow faulty flag to clear unless range data is continuous
+	// Don't allow faulty flag to clear unless range data is continuous in time span
 	if (!_rng_hgt_valid && !isRangeDataContinuous()) {
 		return;
 	}
@@ -91,6 +91,7 @@ void Ekf::updateRangeDataValidity()
 	if ((_range_sample_delayed.rng > _rng_valid_max_val)
 	|| (_range_sample_delayed.rng < _rng_valid_min_val)) {
 		if (_control_status.flags.in_air) {
+			//printf("rngfalse");
 			_rng_hgt_valid = false;
 			return;
 		} else {

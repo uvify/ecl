@@ -859,6 +859,7 @@ void Ekf::controlHeightSensorTimeouts()
 			const extVisionSample &ev_init = _ext_vision_buffer.get_newest();
 			const bool ev_data_available = isRecent(ev_init.time_us, 2 * EV_MAX_INTERVAL);
 
+			// TODO: When EV is faulty, it should be return to
 			if (ev_data_available) {
 				request_height_reset = true;
 				ECL_WARN_TIMESTAMPED("ev hgt timeout - reset to ev hgt");
@@ -942,12 +943,14 @@ void Ekf::controlHeightFusion()
 			if (_control_status_prev.flags.rng_hgt != _control_status.flags.rng_hgt) {
 				if (isTerrainEstimateValid()) {
 					_hgt_sensor_offset = _terrain_vpos;
+					printf("terrain valid %f", (double)_hgt_sensor_offset);
 
 				} else {
 					_hgt_sensor_offset = _R_rng_to_earth_2_2 * _range_sample_delayed.rng + _state.pos(2);
+					printf("terrain not valid %f", (double) _hgt_sensor_offset);
 				}
 			}
-
+			//printf("not rng hgt %f", (double)_hgt_sensor_offset);
 		} else if (!_range_aid_mode_selected && _baro_data_ready && !_baro_hgt_faulty) {
 			setControlBaroHeight();
 			fuse_height = true;
@@ -965,7 +968,7 @@ void Ekf::controlHeightFusion()
 					_control_status.flags.gnd_effect = false;
 				}
 			}
-
+			//printf("BB");
 		} else if (_control_status.flags.gps_hgt && _gps_data_ready && !_gps_hgt_intermittent) {
 			// switch to gps if there was a reset to gps
 			fuse_height = true;
@@ -976,7 +979,7 @@ void Ekf::controlHeightFusion()
 				_hgt_sensor_offset = _gps_sample_delayed.hgt - _gps_alt_ref + _state.pos(2);
 			}
 		}
-
+		//printf("baro");
 		break;
 
 	case VDIST_SENSOR_RANGE:
@@ -990,14 +993,17 @@ void Ekf::controlHeightFusion()
 			// use the parameter rng_gnd_clearance if on ground to avoid a noisy offset initialization (e.g. sonar)
 			if (_control_status.flags.in_air && isTerrainEstimateValid()) {
 				_hgt_sensor_offset = _terrain_vpos;
+				printf("R terrain valid %f\n", (double)_hgt_sensor_offset);
 
 			} else if (_control_status.flags.in_air) {
 				_hgt_sensor_offset = _R_rng_to_earth_2_2 * _range_sample_delayed.rng + _state.pos(2);
+				printf("R2 terrain valid %f\n", (double)_hgt_sensor_offset);
 
 			} else {
 				_hgt_sensor_offset = _params.rng_gnd_clearance;
+				printf("R3 terrain valid %f\n", (double)_hgt_sensor_offset);
 			}
-
+			//printf("F");
 		} else if (_baro_data_ready && !_baro_hgt_faulty) {
 			setControlBaroHeight();
 			fuse_height = true;
@@ -1007,8 +1013,10 @@ void Ekf::controlHeightFusion()
 			if (_control_status_prev.flags.baro_hgt != _control_status.flags.baro_hgt) {
 				_hgt_sensor_offset = 0.0f;
 			}
-		}
 
+			///printf("GGGGGGGGGGGG");
+		}
+		//printf("range");
 		break;
 
 	case VDIST_SENSOR_GPS:
@@ -1017,16 +1025,21 @@ void Ekf::controlHeightFusion()
 		if (_range_aid_mode_selected && _range_data_ready && _rng_hgt_valid) {
 			setControlRangeHeight();
 			fuse_height = true;
-
+			// ECL_INFO("Setting Range Aid");
 			// we have just switched to using range finder, calculate height sensor offset such that current
 			// measurement matches our current height estimate
 			if (_control_status_prev.flags.rng_hgt != _control_status.flags.rng_hgt) {
+				printf("HAH");
 				if (isTerrainEstimateValid()) {
 					_hgt_sensor_offset = _terrain_vpos;
+					printf("terrain valid %f\n", (double)_hgt_sensor_offset);
 
 				} else {
 					_hgt_sensor_offset = _R_rng_to_earth_2_2 * _range_sample_delayed.rng + _state.pos(2);
+					printf("terrain not valid %f\n", (double)_hgt_sensor_offset);
 				}
+			} else {
+				//printf("WOW");
 			}
 
 		} else if (!_range_aid_mode_selected && _gps_data_ready && !_gps_hgt_intermittent && _gps_checks_passed) {
@@ -1039,8 +1052,11 @@ void Ekf::controlHeightFusion()
 				_hgt_sensor_offset = _gps_sample_delayed.hgt - _gps_alt_ref + _state.pos(2);
 			}
 
-		} else if (_control_status.flags.baro_hgt && _baro_data_ready && !_baro_hgt_faulty) {
+			//printf("c8");
+
+		} else if (!_range_aid_mode_selected && _baro_data_ready && !_baro_hgt_faulty) {
 			// switch to baro if there was a reset to baro
+			setControlBaroHeight();
 			fuse_height = true;
 
 			// we have just switched to using baro height, we don't need to set a height sensor offset
@@ -1048,8 +1064,12 @@ void Ekf::controlHeightFusion()
 			if (_control_status_prev.flags.baro_hgt != _control_status.flags.baro_hgt) {
 				_hgt_sensor_offset = 0.0f;
 			}
-		}
 
+			//printf("c9");
+		} else {
+			//printf("_rng_hgt_valid = %d, _range_aid_mode_selected = %d, _range_data_ready = %d\n",
+			//,rng_hgt_valid,_range_aid_mode_selected,_range_data_ready);
+		}
 		break;
 
 	case VDIST_SENSOR_EV:
@@ -1082,6 +1102,7 @@ void Ekf::controlHeightFusion()
 
 	// calculate a filtered offset between the baro origin and local NED origin if we are not using the baro as a height reference
 	if (!_control_status.flags.baro_hgt && _baro_data_ready) {
+		//printf("G");
 		float local_time_step = 1e-6f * _delta_time_baro_us;
 		local_time_step = math::constrain(local_time_step, 0.0f, 1.0f);
 
@@ -1107,6 +1128,7 @@ void Ekf::controlHeightFusion()
 
 	if (fuse_height) {
 		if (_control_status.flags.baro_hgt) {
+			//printf("B");
 			Vector2f baro_hgt_innov_gate;
 			Vector3f baro_hgt_obs_var;
 
@@ -1137,6 +1159,7 @@ void Ekf::controlHeightFusion()
 				baro_hgt_obs_var, _baro_hgt_innov_var,_baro_hgt_test_ratio);
 
 		} else if (_control_status.flags.gps_hgt) {
+			//printf("G");
 			Vector2f gps_hgt_innov_gate;
 			Vector3f gps_hgt_obs_var;
 			// vertical position innovation - gps measurement has opposite sign to earth z axis
@@ -1153,6 +1176,7 @@ void Ekf::controlHeightFusion()
 				gps_hgt_obs_var, _gps_pos_innov_var,_gps_pos_test_ratio);
 
 		} else if (_control_status.flags.rng_hgt && (_R_rng_to_earth_2_2 > _params.range_cos_max_tilt)) {
+			//printf("R");
 			// TODO: Tilt check does not belong here, should not set fuse height to true if tilted
 			Vector2f rng_hgt_innov_gate;
 			Vector3f rng_hgt_obs_var;
@@ -1166,6 +1190,7 @@ void Ekf::controlHeightFusion()
 			// fuse height information
 			fuseVerticalPosition(_rng_hgt_innov,rng_hgt_innov_gate,
 				rng_hgt_obs_var, _rng_hgt_innov_var,_rng_hgt_test_ratio);
+			// ECL_INFO("Fusing Range Data");
 
 		} else if (_control_status.flags.ev_hgt) {
 			Vector2f ev_hgt_innov_gate;
@@ -1205,10 +1230,11 @@ void Ekf::checkRangeAidSuitability()
 					    : ((_hagl_innov * _hagl_innov / (sq(_params.range_aid_innov_gate) * _hagl_innov_var)) < 0.01f);
 
 		_is_range_aid_suitable = is_in_range && is_below_max_speed && is_hagl_stable;
-
+		// ECL_WARN("Range Aid in_rng %d, below_max %d, stable %d, suitable %d", is_in_range, is_below_max_speed, is_hagl_stable, _is_range_aid_suitable);
 	} else {
 		_is_range_aid_suitable = false;
 	}
+
 }
 
 void Ekf::controlAirDataFusion()

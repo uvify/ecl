@@ -285,6 +285,7 @@ void Ekf::fuseFlowForTerrain()
 
 bool Ekf::isTerrainEstimateValid() const
 {
+	// ECL_INFO("Hagl valid : %d", _hagl_valid);
 	return _hagl_valid;
 }
 
